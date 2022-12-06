@@ -1,0 +1,75 @@
+
+mkdir 20221206
+mkdir rawdata
+scp sulky231@nesh-fe.rz.uni-kiel.de:/gxfs_work1/cau/sulky231/data/lab_data/* .
+
+#removing other samples (MG/AC)
+rm Rhodo*
+rm SK103*
+rm st*
+rm 3*
+rm Culture*
+rm PT*
+rm Pos*
+rm gpt95*
+rm neg*
+rm NTC*
+rm CC*
+rm RS*
+rm RD*
+rm gpt100R*
+rm gpt114*
+rm pos*
+rm pgt*
+rm gpt-*
+rm SK*
+rm C400*
+rm Blank-
+rm Blank-*
+rm Mock-HL*
+rm Mock-61*
+
+#fastqc
+conda activate fastqc
+mkdir fastqc_out
+for i in `ls /gxfs_work1/geomar/smomw536/database/20221206/*.gz | head -6`
+do
+fastqc -o fastqc_out $i
+done
+
+#rename
+renamed by david
+
+#cutadapt
+conda deactivate
+conda activate cutadapt
+for i in `ls amplicon_reads | grep _R1_`
+do
+filestem=`basename $i _R1_001.fastq.gz`
+R1=amplicon_reads/$filestem"_R1_001.fastq.gz"
+R2=amplicon_reads/$filestem"_R2_001.fastq.gz"
+sbatch -p cluster -t 4:00:00 --mem=100000 -J cut -o cut.out -e cut.err -n 6 --wrap="cutadapt -g GTGYCAGCMGCCGCGGTAA -G CCGYCAATTYMTTTRAGTTT -e 0.2 --no-indels -j 6 --discard-untrimmed -o trim.$R1 -p trim.$R2 $R1 $R2"
+done
+conda deactivate
+
+#bbsplit
+##############database download###################################
+mkdir $WORK/databases
+cd $WORK/databases
+#download SILVA_132_PROK.cdhit95pc.fasta
+curl -L "https://drive.google.com/u/0/uc?id=14zL-cudiNAqsGbCyVa3DWlSsKxr64CIa&export=download" > SILVA_132_PROK.cdhit95pc.fasta
+#download SILVA_132_and_PR2_EUK.cdhit95.fasta
+curl -L "https://drive.google.com/u/0/uc?id=19Bq_g1Saqe6hASAcKFK3KnIVc9eFp1qp&export=download" > SILVA_132_and_PR2_EUK.cdhit95pc.fasta
+conda activate bbmap
+bbsplit.sh build=1 ref=SILVA_132_and_PR2_EUK.cdhit95pc.fasta,SILVA_132_PROK.cdhit95pc.fasta path=EUK-PROK-bbsplit-db
+##################################################################
+conda activate bbmap
+mkdir bbsplit.seqs
+
+for i in `ls trim.amplicon_reads/*R1*`
+do
+filestem=`basename $i _R1_001.fastq.gz`
+R1=trim.amplicon_reads/$filestem"_R1_001.fastq.gz"
+R2=trim.amplicon_reads/$filestem"_R2_001.fastq.gz"
+sbatch -p cluster -t 1:00:00 --mem=100000 -J bbsplit -o bbsplit.out -e bbsplit.err -n 30 --wrap="bbsplit.sh usequality=f qtrim=f minratio=0.30 minid=0.30 pairedonly=f threads=30 -Xmx100g path=EUK-PROK-bbsplit-db/ in=$R1 in2=$R2 basename=bbsplit.seqs/$filestem.%_#.fastq"
+done
