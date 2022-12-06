@@ -48,7 +48,7 @@ do
 filestem=`basename $i _R1_001.fastq.gz`
 R1=amplicon_reads/$filestem"_R1_001.fastq.gz"
 R2=amplicon_reads/$filestem"_R2_001.fastq.gz"
-sbatch -p cluster -t 4:00:00 --mem=100000 -J cut -o cut.out -e cut.err -n 6 --wrap="cutadapt -g GTGYCAGCMGCCGCGGTAA -G CCGYCAATTYMTTTRAGTTT -e 0.2 --no-indels -j 6 --discard-untrimmed -o trim.$R1 -p trim.$R2 $R1 $R2"
+sbatch -p cluster -t 4:00:00 --mem=100000 -J cutadapt -o cut.out -e cut.err -n 6 --wrap="cutadapt -g GTGYCAGCMGCCGCGGTAA -G CCGYCAATTYMTTTRAGTTT -e 0.2 --no-indels -j 6 --discard-untrimmed -o trim.$R1 -p trim.$R2 $R1 $R2"
 done
 conda deactivate
 
@@ -71,5 +71,41 @@ do
 filestem=`basename $i _R1_001.fastq.gz`
 R1=trim.amplicon_reads/$filestem"_R1_001.fastq.gz"
 R2=trim.amplicon_reads/$filestem"_R2_001.fastq.gz"
-sbatch -p cluster -t 1:00:00 --mem=100000 -J bbsplit -o bbsplit.out -e bbsplit.err -n 30 --wrap="bbsplit.sh usequality=f qtrim=f minratio=0.30 minid=0.30 pairedonly=f threads=30 -Xmx100g path=EUK-PROK-bbsplit-db/ in=$R1 in2=$R2 basename=bbsplit.seqs/$filestem.%_#.fastq"
+sbatch -p cluster -t 1:00:00 --mem=100000 -J bbsplit -o bbsplit.out -e bbsplit.err -n 30 --wrap="bbsplit.sh usequality=f qtrim=f minratio=0.30 minid=0.30 pairedonly=f threads=30 -Xmx100g path=$WORK/databases/EUK-PROK-bbsplit-db in=$R1 in2=$R2 basename=bbsplit.seqs/$filestem.%_#.fastq"
+done
+
+mkdir bbsplit.seqs/Prok_reads
+mv bbsplit.seqs/*SILVA_132_PROK.cdhit95p* bbsplit.seqs/Prok_reads
+
+rename \.SILVA_132_PROK.cdhit95pc_1.fastq _R1_001.fastq bbsplit.seqs/Prok_reads/*1.fastq
+rename \.SILVA_132_PROK.cdhit95pc_2.fastq _R2_001.fastq bbsplit.seqs/Prok_reads/*2.fastq
+
+for i in bbsplit.seqs/Prok_reads/*fastq
+do
+sbatch -p cluster -t 10:00 --mem=100000 -J gzip -o gzip.out -e gzip.err -n 1 --wrap="gzip $i"
+done
+
+#importing the file for the qiime2 (input = directory where the seq are, output = prok.reads.qza)
+sbatch -p cluster -t 2:00:00 --mem=100000 -J importqiime -o import.out -e import.err -n 1 --wrap="qiime tools import --type 'SampleData[PairedEndSequencesWithQuality]' --input-path bbsplit.seqs/Prok_reads/ --input-format CasavaOneEightSingleLanePerSampleDirFmt --output-path prok.reads.qza"
+
+#denoise the sequence, deciding where to cut based on the quality control result and the length of ur desirable product
+sbatch -p cluster -t 24:00:00 --mem=100000 -J denoise -o denoise.out -e denoise.err -n 30 --wrap="qiime dada2 denoise-paired --i-demultiplexed-seqs prok.reads.qza --p-trunc-len-f 270 --p-trunc-len-r 200 --output-dir denoise.prok.reads.qza --p-n-threads 30"
+
+
+sbatch -p cluster -t 24:00:00 --mem=100000 -J silvacut -o drep.out -e drep.err -n 30 --wrap="qiime feature-classifier extract-reads --i-sequences /gxfs_work1/geomar/smomw536/databases/silva-138-99-seqs.qza --output-dir tax.denoise.prok.reads.qza --p-f-primer GTGYCAGCMGCCGCGGTAA --p-r-primer CCGYCAATTYMTTTRAGTTT --p-n-jobs 30 --p-read-orientation 'forward' --o-reads silva-138.1-ssu-nr99-seqs-515f-926r.qza"
+
+sbatch -p cluster -t 24:00:00 --mem=100000 -J vsearch -o vsearch.out -e vsearch.err -n 30 --wrap="qiime feature-classifier classify-consensus-vsearch --p-threads 30 --i-query denoise.prok.reads.qza/representative_sequences.qza --i-reference-taxonomy $WORK/databases/silva-138-99-tax.qza --i-reference-reads  $WORK/databases/silva-138.1-ssu-nr99-seqs-515f-926r.qza --output-dir vsearch.tax.denoise.prok.reads.qza.trimmed"
+
+
+qiime taxa barplot \
+--i-table denoise.prok.reads.qza/table.qza \
+--i-taxonomy vsearch.tax.denoise.prok.reads.qza.trimmed/classification.qza \
+--o-visualization taxa-bar-tax.denoise.prok.reads.qzv
+
+
+zgrep -c "@M05583" $WORK/database/20221206/amplicon_reads/*
+zgrep -c "@A00556:330:HMCLCDRX2" /gxfs_work1/cau/sulky231/*R1*gz
+for i in `ls ./amplicon_reads`
+do
+zcat $i
 done
