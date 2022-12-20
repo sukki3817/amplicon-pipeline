@@ -1,0 +1,84 @@
+#after bbsplit
+cd $WORK/databases
+#downloading database file
+wget http://phytoref.sb-roscoff.fr/static/downloads/PhytoRef_with_taxonomy.fasta
+#changing 'XXXXXXXXXX' seq in the file to 'NNNNNNNNNN' for qiime import
+cut -f1 -d "|" PhytoRef_with_taxonomy.fasta | sed 's/XXXXXXXXXX/NNNNNNNNNN/g' > PhytoRef_with_taxonomy_simple.fasta
+#taking IDs from the database file
+grep ">" PhytoRef_with_taxonomy.fasta | cut -f2 -d ">" | cut -f1 -d '|' > just.seq.ids.PhytoRef_with_taxonomy.fasta
+#taking taxonomy from the database file
+grep ">" PhytoRef_with_taxonomy.fasta | cut -f2 -d ">" | cut -f2- -d '|' > just.taxonomy.PhytoRef_with_taxonomy.fasta
+#combining both files into one file. changing '|' to ' ;' in the taxonomy file at the same time
+paste just.seq.ids.PhytoRef_with_taxonomy.fasta just.taxonomy.PhytoRef_with_taxonomy.fasta | sed 's/|/; /g' > PhytoRef_taxonomy.tsv
+#importing reference sequence data to qiime2
+##type of file: Per-feature unaligned sequence data (i.e., representative FASTA sequences)
+conda activate qiime2-2022.2
+qiime tools import \
+  --type 'FeatureData[Sequence]' \
+  --input-path $WORK/databases/PhytoRef_with_taxonomy_simple.fasta  \
+  --output-path phytoref.qza
+#importing  reference taxonomy data to qiime2
+qiime tools import \
+  --type 'FeatureData[Taxonomy]' \
+  --input-format HeaderlessTSVTaxonomyFormat \
+  --input-path PhytoRef_taxonomy.tsv \
+  --output-path phytoref_tax.qza
+#trimming qimme imported sequencing data with primer that we are using (515F/926R)
+qiime feature-classifier extract-reads \
+  --i-sequences phytoref.qza \
+  --p-f-primer GTGYCAGCMGCCGCGGTAA \
+  --p-r-primer CCGYCAATTYMTTTRAGTTT \
+  --o-reads phytoref_extracts.qza
+
+cd $WORK/database/20221206
+
+#Exporting final file that we used for 16S analysis (It's like an unzipping)
+qiime tools export \
+  --input-path vsearch.tax.denoise.prok.reads.qza.trimmed/classification.qza \
+  --output-path vsearch.tax.denoise.prok.reads.qza.trimmed.classification
+
+# grep taxonomy data that are clasified as chloroplast / taking ASVs of them / make a txt file which only has ASVs to be collected
+grep "o__Chloroplast" vsearch.tax.denoise.prok.reads.qza.trimmed.classification/taxonomy.tsv | cut -f1 > chloroplast.asv.ids.for.phytoref.list
+
+#
+qiime tools export \
+  --input-path denoise.prok.reads.qza/representative_sequences.qza \
+  --output-path denoise.prok.reads.qza.representative.seqs
+
+#using the chloroplast ASV list, going through all the dna seq of 16S rrna gene find the same ASV, extract the ASV data and sequence (grep -A 1),
+#storing grep-ed data as chloroplast sequence data
+for i in `cat chloroplast.asv.ids.for.phytoref.list`
+do 
+grep -A 1 $i denoise.prok.reads.qza.representative.seqs/dna-sequences.fasta
+done > chloroplast.asv.ids.for.phytoref.list.fa
+
+#내 택소노미 결과에서 chloroplast asv를 뺌, 그걸로 내 마지막processed된 seq에서 chloroplast 정보랑 seq만 뺌
+#그 파일을 qiime import하는 중
+qiime tools import \
+  --input-path chloroplast.asv.ids.for.phytoref.list.fa \
+  --output-path chloroplast.asv.ids.for.phytoref.list.fa.qza \
+  --type 'FeatureData[Sequence]'
+
+#classifying the sequences against the phytoref database
+##--i-query my chloroplast data
+##--i-reference-taxonomy tax ref
+##--i-reference-reads seq ref (trimmed)
+sbatch -p cluster -t 1:00:00 --mem=100000 -J cat -o classify.out -e classify.err -n 30 \
+--wrap="qiime feature-classifier classify-consensus-vsearch --p-threads 30 --i-query chloroplast.asv.ids.for.phytoref.list.fa.qza --i-reference-taxonomy $WORK/databases/phytoref_tax.qza --i-reference-reads $WORK/databases/phytoref_extracts.qza --output-dir vsearch.chloroplast.ASVs.phytoref.classification"
+
+#extracting only chloroplast data from the previously denoised file
+qiime taxa filter-table \
+  --i-table denoise.prok.reads.qza/table.qza \
+  --i-taxonomy vsearch.tax.denoise.prok.reads.qza.trimmed/classification.qza \
+  --p-include o__Chloroplast \
+  --o-filtered-table tax.denoise.chloroplast.table.qza
+
+#making barplot using the phytoref taxonomy 
+##--m-metadata-file prok.metadata.txt \
+qiime taxa barplot \
+--i-table tax.denoise.chloroplast.table.qza \
+--i-taxonomy vsearch.chloroplast.ASVs.phytoref.classification/classification.qza \
+--o-visualization taxa-bar-tax.denoise.chloroplasts.qzv
+
+scp 
+
