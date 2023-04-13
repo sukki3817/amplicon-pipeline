@@ -1,0 +1,38 @@
+ssh smomw536@nesh-fe.rz.uni-kiel.de
+cd $WORK/database
+mkdir 20230413
+cd 20230413
+mkdir raw
+sftp dneedham@download.ccga.uni-kiel.de
+2598AQ4J
+cd jf_needham_amplicon_1608 ~~
+get *
+exit
+rename _23Mar \.23Mar *gz
+rm  *DS28* *DS29* *DS30* 
+cd ..
+mkdir amplicon_reads
+mv raw/*gz amplicon_reads
+
+#fastqc
+conda activate fastqc
+mkdir fastqc_out
+for i in `ls /gxfs_work1/geomar/smomw536/database/20230413/amplicon_reads/*.gz | head -6`
+do
+fastqc -o fastqc_out $i
+done
+
+#on the local terminal (/Users/ksookyoung/work/fastqc/20230413)
+scp smomw536@nesh-fe.rz.uni-kiel.de:/gxfs_work1/geomar/smomw536/database/20230413/fastqc_out/*html .
+#check the fastqc result
+
+mkdir trim.amplicon_reads
+
+for i in `ls amplicon_reads | grep _R1_`
+do
+filestem=`basename $i _R1_001.fastq.gz`
+R1=amplicon_reads/$filestem"_R1_001.fastq.gz"
+R2=amplicon_reads/$filestem"_R2_001.fastq.gz"
+sbatch -p cluster -t 4:00:00 --mem=100000 -J cut -o cut.out -e cut.err -n 6 --wrap="cutadapt -g GTGYCAGCMGCCGCGGTAA -G CCGYCAATTYMTTTRAGTTT -e 0.2 --no-indels -j 6 --discard-untrimmed -o trim.$R1 -p trim.$R2 $R1 $R2"
+done
+
