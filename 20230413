@@ -91,3 +91,21 @@ for i in `ls ./amplicon_reads`
 do
 zcat $i
 done
+
+mkdir bbsplit.seqs/Euk_reads
+mkdir bbsplit.seqs/Euk_reads/concatenate
+mv bbsplit.seqs/*SILVA_132_and_PR2_EUK.cdhit95* bbsplit.seqs/Euk_reads 
+
+cat bbsplit.seqs/Euk_reads/* |grep -o '@M50181' |wc -l
+##54
+
+for i in `ls ./bbsplit.seqs/Euk_reads`
+do
+cat ./bbsplit.seqs/Euk_reads/$i |grep -o '@M50181' |wc -l
+done
+## all less than 13 counts
+
+
+#main storage
+/gxfs_work1/geomar/smomw456/needham_illumina_data
+
