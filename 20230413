@@ -38,6 +38,8 @@ filestem=`basename $i _R1_001.fastq.gz`
 R1=amplicon_reads/$filestem"_R1_001.fastq.gz"
 R2=amplicon_reads/$filestem"_R2_001.fastq.gz"
 sbatch -p cluster -t 4:00:00 --mem=100000 -J cut -o cut.out -e cut.err -n 6 --wrap="cutadapt -g GTGYCAGCMGCCGCGGTAA -G CCGYCAATTYMTTTRAGTTT -e 0.2 --no-indels -j 6 --discard-untrimmed -o trim.$R1 -p trim.$R2 $R1 $R2"
+sbatch -p cluster -t 4:00:00 --mem=100000 -J cut -o cut.out -e cut.err -n 6 --wrap="cutadapt -g GTGYCAGCMGCCGCGGTAA -G CCGYCAATTYMTTTRAGTTT -e 0.1 --no-indels -j 6 --discard-untrimmed -o trim.$R1 -p trim.$R2 $R1 $R2"
+
 done
 conda deactivate cutadapt
 
@@ -69,6 +71,10 @@ conda activate qiime2-2022.2
 sbatch -p cluster -t 2:00:00 --mem=100000 -J importqiime -o import.out -e import.err -n 1 --wrap="qiime tools import --type 'SampleData[PairedEndSequencesWithQuality]' --input-path bbsplit.seqs/Prok_reads/ --input-format CasavaOneEightSingleLanePerSampleDirFmt --output-path prok.reads.qza"
 
 sbatch -p cluster -t 24:00:00 --mem=100000 -J denoise -o denoise.out -e denoise.err -n 30 --wrap="qiime dada2 denoise-paired --i-demultiplexed-seqs prok.reads.qza --p-trunc-len-f 220 --p-trunc-len-r 220 --output-dir denoise.prok.reads.qza --p-n-threads 30 --verbose"
+sbatch -p cluster -t 24:00:00 --mem=100000 -J denoise -o denoise.out -e denoise.err -n 30 --wrap="qiime dada2 denoise-paired --p-max-ee-f 1 --p-max-ee-r 1 --i-demultiplexed-seqs prok.reads.qza --p-trunc-len-f 220 --p-trunc-len-r 220 --output-dir denoise.prok.reads.2.qza --p-n-threads 30 --verbose"
+sbatch -p cluster -t 24:00:00 --mem=100000 -J denoise -o denoise.out -e denoise.err -n 30 --wrap="qiime dada2 denoise-paired --p-max-ee-f 0.1 --p-max-ee-r 0.1 --i-demultiplexed-seqs prok.reads.qza --p-trunc-len-f 220 --p-trunc-len-r 220 --output-dir denoise.prok.reads.3.qza --p-n-threads 30 --verbose"
+sbatch -p cluster -t 24:00:00 --mem=100000 -J denoise -o denoise.out -e denoise.err -n 30 --wrap="qiime dada2 denoise-paired --p-max-ee-f 0.1 --p-max-ee-r 0.1 --i-demultiplexed-seqs prok.reads.qza --p-trunc-len-f 225 --p-trunc-len-r 190 --output-dir denoise.prok.reads.4.qza --p-n-threads 30 --verbose"
+
 
 #hey next time, run it with --verbose to learn how it works
 sbatch -p cluster -t 24:00:00 --mem=100000 -J extractread -o extractread.out -e extractread.err -n 30 --wrap="qiime feature-classifier extract-reads --i-sequences /gxfs_work1/geomar/smomw536/databases/silva-138-99-seqs.qza --output-dir tax.denoise.prok.reads.qza --p-f-primer GTGYCAGCMGCCGCGGTAA --p-r-primer CCGYCAATTYMTTTRAGTTT --p-n-jobs 30 --p-read-orientation 'forward' --o-reads silva-138.1-ssu-nr99-seqs-515f-926r.qza"
@@ -122,4 +128,8 @@ sed 's/Feature ID/#OTUID/g' prok.classification/taxonomy.tsv  | sed 's/Taxon/tax
 biom add-metadata -i denoise.prok.reads.qza.biom/feature-table.biom -o denoise.prok.reads.qza.biom/w.tax.feature-table.biom --observation-metadata-fp tax.denoise.prok.reads.qza/reformat.taxonomy.tsv --sc-separated taxonomy
 biom convert -i denoise.prok.reads.qza.biom/w.tax.feature-table.biom --to-tsv -o denoise.prok.reads.qza.biom/w.tax.feature-table.biom.tsv --header-key taxonomy
 
+
+###################20230515 check if the archaea strain in the culture is sequencing artifacts or real########
+
+grep -A 1 "37eb3b265101dfd203a365418b5de7ef" */*na*
 
