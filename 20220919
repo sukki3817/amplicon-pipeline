@@ -1,0 +1,22 @@
+##export files from 20220919 data
+
+sbatch -p cluster -t 24:00:00 --mem=100000 -J vsearch -o vsearch.out -e vsearch.err -n 30 --wrap="qiime feature-classifier classify-consensus-vsearch --p-threads 30 --i-query denoise.prok.reads.qza/representative_sequences.qza --i-reference-taxonomy $WORK/databases/silva-138-99-tax.qza --i-reference-reads  $WORK/databases/silva-138.1-ssu-nr99-seqs-515f-926r.qza --output-dir vsearch.tax.denoise.prok.reads.qza.trimmed"
+
+#output is a 'taxonomy.tsv' file
+qiime tools export --input-path vsearch.tax.denoise.prok.reads.qza.trimmed/classification.qza --output-path vsearch.tax.denoise.prok.reads.qza.trimmed.classification
+#output: dna-sequences.fasta, assigned code and representative asv seqeunces
+qiime tools export --input-path denoise.prok.reads.qza/representative_sequences.qza --output-path denoise.prok.reads.qza.representative.seqs
+# it did the same job
+qiime tools export --input-path vsearch.tax.denoise.prok.reads.qza.trimmed/classification.qza --output-path prok.classification
+#
+
+sed 's/Feature ID/#OTUID/g' vsearch.tax.denoise.prok.reads.qza.trimmed.classification/taxonomy.tsv  | sed 's/Taxon/taxonomy/g' | sed 's/Consensus/confidence/g' > tax.denoise.prok.reads.qza/reformat.taxonomy.tsv 
+# output: feature-table.biom
+qiime tools export --input-path denoise.prok.reads.qza/table.qza --output-path denoise.prok.reads.qza.biom
+# add metadata to feature-table.biom , output: w.tax.feature-table.biom
+biom add-metadata -i denoise.prok.reads.qza.biom/feature-table.biom -o denoise.prok.reads.qza.biom/w.tax.feature-table.biom --observation-metadata-fp tax.denoise.prok.reads.qza/reformat.taxonomy.tsv --sc-separated taxonomy
+# conver .biom file to .tsv file
+biom convert -i denoise.prok.reads.qza.biom/w.tax.feature-table.biom --to-tsv -o denoise.prok.reads.qza.biom/w.tax.feature-table.biom.tsv --header-key taxonomy
+
+#download tsv file to a local computer
+scp smomw536@nesh-fe.rz.uni-kiel.de:/gxfs_work1/geomar/smomw536/database/20220919/denoise.prok.reads.qza.biom/w.tax.feature-table.biom.tsv .
