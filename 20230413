@@ -133,3 +133,14 @@ biom convert -i denoise.prok.reads.qza.biom/w.tax.feature-table.biom --to-tsv -o
 
 grep -A 1 "37eb3b265101dfd203a365418b5de7ef" */*na*
 
+
+##############20230602, export data from   denoise.prok.reads.3.qza 
+qiime tools export --input-path denoise.prok.reads.3.qza/representative_sequences.qza --output-path denoise.prok.reads.3.qza.representative.seqs
+qiime tools export --input-path vsearch.tax.denoise.prok.reads.3.qza.trimmed/classification.qza --output-path prok.3.classification
+qiime tools export --input-path denoise.prok.reads.3.qza/table.qza --output-path denoise.prok.reads.3.qza.biom
+sed 's/Feature ID/#OTUID/g' prok.3.classification/taxonomy.tsv  | sed 's/Taxon/taxonomy/g' | sed 's/Consensus/confidence/g' > tax.denoise.prok.3.reads.qza/reformat.taxonomy.tsv 
+biom add-metadata -i denoise.prok.reads.3.qza.biom/feature-table.biom -o denoise.prok.reads.3.qza.biom/w.tax.feature-table.biom --observation-metadata-fp tax.denoise.prok.3.reads.qza/reformat.taxonomy.tsv --sc-separated taxonomy
+biom convert -i denoise.prok.reads.3.qza.biom/w.tax.feature-table.biom --to-tsv -o denoise.prok.reads.3.qza.biom/w.tax.feature-table.3.biom.tsv --header-key taxonomy
+
+scp smomw536@nesh-fe.rz.uni-kiel.de:/gxfs_work1/geomar/smomw536/database/20230413/denoise.prok.reads.3.qza.biom/w.tax.feature-table.3.biom.tsv .
+
