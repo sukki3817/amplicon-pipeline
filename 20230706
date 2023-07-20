@@ -88,6 +88,41 @@ qiime taxa barplot \
 
 scp smomw536@nesh-fe.rz.uni-kiel.de:/gxfs_work1/geomar/smomw536/database/20230706/taxa-bar-tax.denoise.prok.reads.qzv .
 
+##########20230710 Monday
+###########Euk check
+
+
+mkdir bbsplit.seqs/Euk_reads
+mkdir bbsplit.seqs/Euk_reads/concatenate
+mv bbsplit.seqs/*SILVA_132_and_PR2_EUK.cdhit95* bbsplit.seqs/Euk_reads 
+
+cat bbsplit.seqs/Euk_reads/* |grep -o '@M05583' |wc -l
+#98
+
+for i in `ls ./bbsplit.seqs/Euk_reads`
+do
+cat ./bbsplit.seqs/Euk_reads/$i |grep -o '@M05583' |wc -l
+done
+#0~23
+
+###########back up to local computer#############
+#local directory /Users/ksookyoung/work/20230706/raw
+scp -r smomw536@nesh-fe.rz.uni-kiel.de:/gxfs_work1/geomar/smomw536/database/20230706/amplicon_reads /Users/ksookyoung/work/20230706/raw
+scp -r smomw536@nesh-fe.rz.uni-kiel.de:/gxfs_work1/geomar/smomw536/database/20230706/metagenome /Users/ksookyoung/work/20230706/raw
+
+##########export biom data############
+conda activate qiime2-2022.2
+qiime tools export --input-path denoise.prok.reads.qza/representative_sequences.qza --output-path denoise.prok.reads.qza.representative.seqs
+qiime tools export --input-path vsearch.tax.denoise.prok.reads.qza.trimmed/classification.qza --output-path prok.classification
+qiime tools export --input-path denoise.prok.reads.qza/table.qza --output-path denoise.prok.reads.qza.biom
+sed 's/Feature ID/#OTUID/g' prok.classification/taxonomy.tsv  | sed 's/Taxon/taxonomy/g' | sed 's/Consensus/confidence/g' > tax.denoise.prok.reads.qza/reformat.taxonomy.tsv 
+biom add-metadata -i denoise.prok.reads.qza.biom/feature-table.biom -o denoise.prok.reads.qza.biom/w.tax.feature-table.biom --observation-metadata-fp tax.denoise.prok.reads.qza/reformat.taxonomy.tsv --sc-separated taxonomy
+biom convert -i denoise.prok.reads.qza.biom/w.tax.feature-table.biom --to-tsv -o denoise.prok.reads.qza.biom/w.tax.feature-table.biom.tsv --header-key taxonomy
+
+scp smomw536@nesh-fe.rz.uni-kiel.de:/gxfs_work1/geomar/smomw536/database/20230706/denoise.prok.reads.qza.biom/w.tax.feature-table.biom.tsv .
+
+
+
 
 
 
